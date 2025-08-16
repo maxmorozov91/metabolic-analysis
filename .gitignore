@@ -205,3 +205,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# Input data files
+input/*
+
+# Result files
+result/*
+
+# Database files
+db/*
