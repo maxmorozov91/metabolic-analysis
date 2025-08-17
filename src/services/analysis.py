@@ -9,17 +9,17 @@ from src.services.constants import MODE_DICT, APPLYABLE_FILETYPES
 
 def analyze_sample(
         *,
-        sample_name: str,
-        sample_input_dir: str,
-        sample_result_dir: str,
-        db_dir: str,
+        sample: str,
+        sample_input_dir: Path,
+        sample_result_dir: Path,
+        db_dir: Path,
         gff_type: Literal["prodigal", "NCBI_prok"],
         threads: str
 ) -> bool:
     """
     Анализирует все файлы одного образца.
 
-    :param sample_name: имя образца
+    :param sample: имя образца
     :param sample_input_dir: путь к папке с исходными файлами образца для анализа
     :param sample_result_dir: путь к папке с результатами анализа образца
     :param db_dir: путь к папке с БД
@@ -27,32 +27,28 @@ def analyze_sample(
     :param threads: количество потоков для параллельных вычислений
     :return: флаг успешности анализа образца
     """
+    # список файлов, которые подлежат анализу
+    files = [file for file in os.listdir(sample_input_dir) if file.split(".")[-1] in APPLYABLE_FILETYPES]
+    files.sort()
+
     result_flags = dict() # словарь для хранения флагов успешности анализа файлов
 
-    for filename in os.listdir(sample_input_dir):
-        # определим тип файла по его расширению (fna, faa, fasta и т.п.)
-        filetype = filename.split(".")[-1]
-
-        if not filetype in APPLYABLE_FILETYPES:
-            logger.warning(f"Skip analysis for {filename}")
-            continue
-
-        input_filepath = sample_input_dir + "/" + filename
+    for filename in files:
+        logger.info(f"Start substrat prediction for {filename}")
 
         substract_predicted = predict_substrate(
             filename=filename,
-            input_filepath=input_filepath,
-            filetype=filetype,
             db_dir=db_dir,
-            gff_type=gff_type,
+            sample_input_dir=sample_input_dir,
             sample_result_dir=sample_result_dir,
+            gff_type=gff_type,
             threads=threads
         )
 
         result_flags[filename] = substract_predicted
 
     if all(result_flags.values()):
-        logger.info(f"Sample analyzed successfully: {sample_name}")
+        logger.info(f"Sample analyzed successfully: {sample}")
         return True
 
     logger.warning(
@@ -66,11 +62,10 @@ def analyze_sample(
 def predict_substrate(
         *,
         filename: str,
-        input_filepath: str,
-        filetype: str,
-        db_dir: str,
+        db_dir: Path,
+        sample_input_dir: Path,
+        sample_result_dir: Path,
         gff_type: Literal["prodigal", "NCBI_prok"],
-        sample_result_dir: str,
         threads: str
 ) -> bool:
     """
@@ -85,8 +80,14 @@ def predict_substrate(
     :param threads: количество потоков для параллельных вычислений
     :return: флаг успешности анализа
     """
+    # определим тип файла по его расширению (fna, faa, fasta и т.п.)
+    filetype = filename.split(".")[-1]
+
+    input_filepath = sample_input_dir / filename  # полный путь к файлу для анализа
+    file_result_dir = sample_result_dir / filename  # полный путь к папке для сохранения результатов анализа файла
+
     mode = MODE_DICT[filetype]
-    gff_filepath = ".".join(input_filepath.split(".")[:-1]) + ".gff"
+    gff_filepath = sample_input_dir / (".".join(filename.split(".")[:-1]) + ".gff")  # полный путь к файлу gff
 
     command = [
         "run_dbcan",
@@ -94,15 +95,20 @@ def predict_substrate(
         "--db_dir", db_dir,
         "--mode", mode,
         "--input_raw_data", input_filepath,
-        "--output_dir", sample_result_dir,
+        "--output_dir", file_result_dir,
         "--threads", threads,
         "--gff_type", gff_type,
         "--input_gff", gff_filepath,
     ]
 
+    logger.debug(
+        "A command for the execution:\n"
+        f"{command}"
+    )
+
     try:
         sp.run(command, check=True)
-        logger.debug(f"Substrate predicted successfully for {filename}.")
+        logger.info(f"Substrate predicted successfully for {filename}.")
         return True
     
     except sp.CalledProcessError as e:
