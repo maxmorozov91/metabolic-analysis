@@ -3,13 +3,15 @@ import subprocess as sp
 from pathlib import Path
 from typing import Literal
 
-from src.services.common import logger
+from src.services.common import logger, timing_decorator
 from src.services.constants import MODE_DICT, APPLYABLE_FILETYPES
 
 
+@timing_decorator
 def analyze_sample(
-        *,
         sample: str,
+        /,
+        *,
         sample_input_dir: Path,
         sample_result_dir: Path,
         db_dir: Path,
@@ -34,10 +36,10 @@ def analyze_sample(
     result_flags = dict() # словарь для хранения флагов успешности анализа файлов
 
     for filename in files:
-        logger.info(f"Start substrat prediction for {filename}")
+        logger.info(f"Start a substrat prediction for {filename}")
 
         substract_predicted = predict_substrate(
-            filename=filename,
+            filename,
             db_dir=db_dir,
             sample_input_dir=sample_input_dir,
             sample_result_dir=sample_result_dir,
@@ -48,7 +50,7 @@ def analyze_sample(
         result_flags[filename] = substract_predicted
 
     if all(result_flags.values()):
-        logger.info(f"Sample analyzed successfully: {sample}")
+        logger.info(f"The sample analyzed successfully: {sample}")
         return True
 
     logger.warning(
@@ -59,9 +61,11 @@ def analyze_sample(
     return False
 
 
+@timing_decorator
 def predict_substrate(
-        *,
         filename: str,
+        /,
+        *,
         db_dir: Path,
         sample_input_dir: Path,
         sample_result_dir: Path,
@@ -80,8 +84,7 @@ def predict_substrate(
     :param threads: количество потоков для параллельных вычислений
     :return: флаг успешности анализа
     """
-    # определим тип файла по его расширению (fna, faa, fasta и т.п.)
-    filetype = filename.split(".")[-1]
+    filetype = filename.split(".")[-1]  # тип файла по его расширению (fna, faa, fasta и т.п.)
 
     input_filepath = sample_input_dir / filename  # полный путь к файлу для анализа
     file_result_dir = sample_result_dir / filename  # полный путь к папке для сохранения результатов анализа файла
@@ -112,5 +115,5 @@ def predict_substrate(
         return True
     
     except sp.CalledProcessError as e:
-        logger.error(f"Error during substrate prediction for {filename}", exc_info=True)
+        logger.error(f"Error during the substrate prediction for {filename}", exc_info=True)
         return False
